@@ -1,0 +1,204 @@
+#!/usr/bin/php
+<?php
+
+/****
+ * The codegems utility 
+ * http://github.com/kamasheto/codegems
+ *
+ *
+ * author @kamasheto
+ */
+
+
+/**** 
+ * Functions 
+ */
+
+function get_param($index) {
+  $args = $_SERVER['argv'];
+  
+  if ($index >= count($args)) {
+    return null;
+  }
+
+  return $_SERVER['argv'][$index];
+}
+
+function println($out) {
+  print $out . "\n";
+}
+
+function write_info() {
+  global $project_info;
+  file_put_contents('.codegems.inf', serialize($project_info));
+}
+
+function codegems_project() {
+  return file_exists('.codegems.php') && file_exists('.codegems.inf');
+}
+
+function run($cmd) {
+  `$cmd 2>&1`;
+}
+
+function copy_codegems() {
+  global $codegems;
+
+  foreach ($codegems as $gems) {
+
+  }
+}
+
+function pull_repos($clone = false) {
+  global $codegems;
+
+  println("Cloning repos for the first time...");
+
+  foreach ($codegems as $gem) {
+    if ($clone) {
+      print(" - cloning {$gem['name']}... ");
+      run("git clone {$gem['href']} /tmp/{$gem['name']}");
+      $project_info['installed_gems'][] = $gem;
+    } else {
+      print " - updating {$gem['name']}... ";
+      run("git pull");
+    }
+    println("done");
+  }
+}
+
+/**** 
+ * Variables
+ */
+$project_info = array('first_run' => true, 'framework' => '-', 'installed_gems' => array());
+
+
+
+/**** 
+ * File contents
+ */
+
+$file_codegems = <<<EOF
+<?php
+
+// This is a PHP array that includes what gems you want included in your project
+\$codegems = array(
+  
+  // For each gem you need, add an array
+  // Options are available at #href
+  array(
+    # Name of codegem (required)
+    'name' => '',
+    
+    # Link to repo. Read permission enough. (required)
+    'href' => '',
+
+    # Tag/commit to get. Default: latest (optional)
+    'version' => 'latest',
+  ),
+
+)
+EOF;
+
+/**** 
+ * BRAIN
+ */
+
+if (get_param(1) != 'init') {
+  if (!codegems_project()) {
+    println("This does not seem like a codegems project. Get started by init: codegems init"); 
+    exit(0);
+  } else {
+    include '.codegems.php';
+    $project_info = file_get_contents('.codegems.inf');
+    $project_info = unserialize($project_info);
+  }
+}
+
+switch (get_param(1)) {
+  case 'init':
+    if (! file_exists('.codegems.php')) {
+      file_put_contents('.codegems.php', $file_codegems);
+    }
+
+    $index = null;
+
+    if (file_exists('index.php')) {
+      $index = 'index.php';
+    }
+
+    if ($index) {
+     $index = file_get_contents($index);
+
+     $frameworks = array('CodeIgniter', 'CakePHP', 'WordPress', 'Drupal');
+     foreach ($frameworks as $framework) {
+       if (strpos($index, $framework) !== false) {
+         $project_info['framework'] = $framework;
+         break;
+       }
+     } 
+    }
+
+    write_info();
+
+    break;
+
+
+  case 'destroy':
+    $rm = array('.codegems.php', '.codegems.inf');
+    foreach ($rm as $r) {
+      unlink($r);
+    }
+    break;
+
+  case 'test':
+    break;
+
+  case 'sync':
+    if ($project_info['first_run']) {
+      $project_info['first_run'] = false;
+      pull_repos(true);
+      copy_codegems();
+    } else {
+      pull_repos();
+    }
+
+    write_info();
+    break;
+
+  case 'help':
+  default:
+
+
+    switch(get_param(2)) {
+      case 'init':
+        println("
+        Initializes the codegems project");
+        break;
+      default:
+        print "Usage: codegems help <cmd>
+Possible commands:
+- init
+- sync
+- destroy
+";
+        break;
+    }
+
+    break;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
