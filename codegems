@@ -25,12 +25,32 @@ function get_param($index) {
 }
 
 function println($out) {
+  global $level;
+
   print $out . "\n";
+  for ($i = 0; $i < $level; $i++) {
+    print '  ';
+  }
 }
 
 function write_info() {
   global $project_info;
+  print "Updating gems info... ";
+  $project_info = array_unique_r($project_info);
   file_put_contents('.codegems.inf', serialize($project_info));
+  println("done");
+}
+
+function array_unique_r($array) {
+  $array = array_unique($array);
+
+  foreach ($array as $k => $v) {
+    if (is_array($v)) {
+      $array[$k] = array_unique_r($v);
+    }
+  }
+
+  return $array;
 }
 
 function codegems_project() {
@@ -49,28 +69,38 @@ function copy_codegems() {
   }
 }
 
-function pull_repos($clone = false) {
-  global $codegems;
+function pull_repos() {
+  global $codegems, $project_info;
 
-  println("Cloning repos for the first time...");
+  println("Cloning repos for the first time..."); tab();
 
   foreach ($codegems as $gem) {
-    if ($clone) {
-      print(" - cloning {$gem['name']}... ");
-      run("git clone {$gem['href']} /tmp/{$gem['name']}");
-      $project_info['installed_gems'][] = $gem;
-    } else {
-      print " - updating {$gem['name']}... ";
+    $project_info['installed_gems'][] = $gem;
+    $dir = "/tmp/{$gem['name']}";
+    if (file_exists($dir) and is_dir($dir)) {
+      print "Updating {$gem['name']}... ";
       run("git pull");
+    } else {
+      print("Cloning {$gem['name']}... ");
+      run("git clone {$gem['href']} $dir");
     }
     println("done");
   }
+
+  tab(-1);
+}
+
+function tab($sign = 1) {
+  global $level;
+
+  $level = $level + 1 * $sign;
 }
 
 /**** 
  * Variables
  */
-$project_info = array('first_run' => true, 'framework' => '-', 'installed_gems' => array());
+$project_info = array('framework' => '-', 'installed_gems' => array());
+$level = 0;
 
 
 
@@ -117,8 +147,11 @@ if (get_param(1) != 'init') {
 
 switch (get_param(1)) {
   case 'init':
+    println("Initializing codegems project... "); tab();
     if (! file_exists('.codegems.php')) {
+      print "Create .codegems.php... ";
       file_put_contents('.codegems.php', $file_codegems);
+      println("done");
     }
 
     $index = null;
@@ -128,17 +161,26 @@ switch (get_param(1)) {
     }
 
     if ($index) {
-     $index = file_get_contents($index);
+      print "Inspecting project framework... ";
+      $index = file_get_contents($index);
 
-     $frameworks = array('CodeIgniter', 'CakePHP', 'WordPress', 'Drupal');
-     foreach ($frameworks as $framework) {
-       if (strpos($index, $framework) !== false) {
-         $project_info['framework'] = $framework;
-         break;
-       }
-     } 
+      $found_framework = false;
+      $frameworks = array('CodeIgniter', 'CakePHP', 'WordPress', 'Drupal');
+      foreach ($frameworks as $framework) {
+        if (strpos($index, $framework) !== false) {
+          $found_framework = true;
+          $project_info['framework'] = $framework;
+          println("found $framework");
+          break;
+        }
+      } 
+
+      if (! $found_framework) {
+        println("did not recognize framework");
+      }
     }
 
+    tab(-1);
     write_info();
 
     break;
@@ -155,14 +197,7 @@ switch (get_param(1)) {
     break;
 
   case 'sync':
-    if ($project_info['first_run']) {
-      $project_info['first_run'] = false;
-      pull_repos(true);
-      copy_codegems();
-    } else {
-      pull_repos();
-    }
-
+    pull_repos();
     write_info();
     break;
 
